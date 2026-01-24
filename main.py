@@ -1,6 +1,14 @@
 import matplotlib.pyplot as plt
 import numpy as np
 from datetime import datetime
+from ipywidgets import interact, IntSlider
+
+import numpy as np
+import matplotlib.pyplot as plt
+from ipywidgets import interact, IntSlider
+
+
+
 
 def line_chart_example():
     # Генерація даних
@@ -70,7 +78,25 @@ def pie_chart_example():
     # Показ графіка
     plt.show()
 
+# def interact_for_jupyter():
+#     def plot_sine_wave(frequency):
+#         x = np.linspace(0, 10, 100)
+#         y = np.sin(frequency * x)
+#         plt.figure(figsize=(10, 5))
+#         plt.plot(x, y)
+#         plt.title(f'Sine Wave with Frequency {frequency}')
+#         plt.xlabel('X-axis')
+#         plt.ylabel('Y-axis')
+#         plt.grid(True)
+#         plt.show()
+#
+#     interact(plot_sine_wave, frequency=IntSlider(min=1, max=10, step=1, value=1))
+#
+#
+
+
 if __name__ == "__main__":
-    line_chart_example()
-    bar_chart_example()
-    pie_chart_example()
+    # line_chart_example()
+    # bar_chart_example()
+    # pie_chart_example()
+    interact_for_jupyter()
