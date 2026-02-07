@@ -64,8 +64,8 @@ def run_real_time_detection(camera_id=0, confidence_threshold=0.3):
         print("Помилка: Не вдалося відкрити відеопотік.")
         return
 
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640) # встановлення ширини кадру
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480) # встановлення висоти кад
+    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280) # встановлення ширини кадру
+    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720) # встановлення висоти кад
 
     print("Починаємо обробку відеопотоку. Натисніть 'q' для виходу.")
 
@@ -103,7 +103,7 @@ def run_real_time_detection(camera_id=0, confidence_threshold=0.3):
 
                 cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)  # малювання прямокутника навколо виявленого об'єкта
 
-                label = f"{class_name} - {confidence:.2f}"
+                label = f"{class_name} - {round(confidence * 100, 2)}%"  # створення тексту з назвою класу та ймовірністю
                 draw_text_with_background(frame, label, (x1, y1 - 10))  # малювання тексту з фоном над прямокутником
         except Exception as e:
             print(f"Помилка при обробці кадру: {e}")
@@ -127,7 +127,7 @@ def run_real_time_detection(camera_id=0, confidence_threshold=0.3):
 
 def main():
     try:
-        run_real_time_detection(camera_id=0, confidence_threshold=0.3)
+        run_real_time_detection(camera_id=1, confidence_threshold=0.2)
     except KeyboardInterrupt:
         print("Завершення роботи за запитом користувача.")
     except Exception as e:
