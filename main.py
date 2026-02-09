@@ -65,7 +65,7 @@ class FaceRecognitionSystem:
             print(f"Папка '{photo_folder}' не знайдена. Створіть папку та додайте фотографії.")
             return False
 
-        person_folders = [f for f in Path(photo_folder).interdir() if f.is_dir()]
+        person_folders = [f for f in Path(photo_folder).iterdir() if f.is_dir()]
 
         if not person_folders:
             print(f"У папці '{photo_folder}' немає підпапок з фотографіями.")
@@ -74,7 +74,7 @@ class FaceRecognitionSystem:
         total_photos = 0
         for person_folder in person_folders:
             person_name = person_folder.name
-            photo_files = list(person_folder.glob("*.*"))
+            photo_files = list(person_folder.glob("*.jpg")) + list(person_folder.glob("*.jpeg")) + list(person_folder.glob("*.png"))
             if not photo_files:
                 print(f"У папці '{person_folder}' немає фотографій.")
                 continue
@@ -83,7 +83,7 @@ class FaceRecognitionSystem:
                 try:
                     image = face_recognition.load_image_file(photo_file)
                     enc = face_recognition.face_encodings(image)
-                    if len(enc):
+                    if len(enc) == 0:
                         continue
                     self.known_face_encodings.append(enc[0])
                     self.known_face_names.append(person_name)
@@ -94,7 +94,7 @@ class FaceRecognitionSystem:
         print(f"Завантажено {total_photos} фотографій для {len(self.known_face_names)} осіб.")
         return total_photos > 0
 
-    def process_frame(self, frame, face_interval=3, scale_factor=0.25):
+    def process_frame(self, frame, face_interval=4, scale_factor=0.5):
         people_boxes = []
         small_frame = cv2.resize(frame, (0, 0), fx=scale_factor, fy=scale_factor)
         results = self.person_detector(small_frame, classes=[0], conf=0.5, verbose=False)
@@ -136,8 +136,71 @@ class FaceRecognitionSystem:
 
         self.frame_count += 1
 
+    def draw_results(self, frame):
+        with self.lock:
+            people_boxes = self.face_people_boxes.copy()
+            face_locations = self.face_locations.copy()
+            face_names = self.face_names.copy()
+
+        for (x1, y1, x2, y2) in people_boxes:
+            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+            cv2.putText(frame, "Person", (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
+
+        for (top, right, bottom, left), (name, confidence) in zip(face_locations, face_names):
+            cv2.rectangle(frame, (left, top), (right, bottom), (255, 0, 0), 2)
+            label = f"{name} ({confidence:.1f}%)" if name != "Unknown" else name
+            cv2.putText(frame, label, (left, top - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 0), 2)
+
+def run_face_recognition(camera_id=0, photos_folder="photos"):
+    system = FaceRecognitionSystem()
+    if not system.load_known_faces(photos_folder):
+        print("Не вдалося завантажити відомі обличчя. Перевірте папку 'photos' та її вміст.")
+        return
+    grabber = FrameGrabber(camera_id)
+    grabber.start()
+
+    print("Починаємо розпізнавання облич. Натисніть 'q' для виходу.")
+    fps_start = time.time()
+    fps_count = 0
+    fps = 0
+
+    process_thread = None
+
+    try:
+        while True:
+            frame = grabber.read()
+            if frame is None:
+                continue
+
+            if process_thread is None or not process_thread.is_alive():
+                process_thread = threading.Thread(target=system.process_frame, args=(frame,))
+                process_thread.start()
+
+            system.draw_results(frame)
+
+            fps_count += 1
+            if time.time() - fps_start >= 1.0:
+                fps = fps_count
+                fps_count = 0
+                fps_start = time.time()
+
+            # Відображення FPS на відео
+            cv2.putText(frame, f"FPS: {fps}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 255, 255), 2)
+            cv2.imshow("Face Recognition", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+
+    except KeyboardInterrupt:
+        print("Зупинено користувачем.")
+    finally:
+        grabber.stop()
+        grabber.join()
+        cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    print("Hello World!")
-    face_recognition_system = FaceRecognitionSystem()
+    try:
+        run_face_recognition(camera_id=0, photos_folder="photos")
+    except Exception as e:
+        print(f"Сталася помилка: {e}")
+        # traceback.print_exc()
