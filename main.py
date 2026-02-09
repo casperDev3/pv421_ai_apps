@@ -58,6 +58,7 @@ class FaceRecognitionSystem:
         self.frame_count = 0
         self.lock = threading.Lock()
 
+
     def load_known_faces(self, photo_folder="photos"):
         print("Завантаження відомих облич...")
         if not os.path.exists(photo_folder):
