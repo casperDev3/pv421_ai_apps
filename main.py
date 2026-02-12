@@ -127,7 +127,7 @@ def run_real_time_detection(camera_id=0, confidence_threshold=0.3):
 
 def main():
     try:
-        run_real_time_detection(camera_id=1, confidence_threshold=0.2)
+        run_real_time_detection(camera_id=0, confidence_threshold=0.6)
     except KeyboardInterrupt:
         print("Завершення роботи за запитом користувача.")
     except Exception as e:
