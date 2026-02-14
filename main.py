@@ -43,14 +43,15 @@ def load_model():
 
     pipe = StableDiffusionPipeline.from_pretrained(
         MODEL_ID,
-        cache_dir=MODEL_CACHE_DIR if local else None,  # використання кешу, якщо модель вже була завантажена раніше
+        cache_dir=MODEL_CACHE_DIR if local else None,
+        use_safetensors=True,
+        # використання кешу, якщо модель вже була завантажена раніше
         torch_dtype=torch.float16 if device == "cuda" else torch.float32,
         # використання 16-бітної точності для GPU та 32-бітної для CPU
         safety_checker=None,  # відключення перевірки безпеки для прискор
         local_files_only=local,
-        use_safetensors=True,
         low_cpu_mem_usage=True,
-        variant="fp16" if device == "cuda" else None
+        variant="fp16"
     ).to(device)  # завантаження моделі на вказаний пристрій
 
     if device == "cuda":
@@ -59,7 +60,7 @@ def load_model():
     return pipe
 
 
-def generate_image(pipe, prompt, output_path=f"generated_image_{time.time()}.png", steps=50, guidance_scale=7.5):
+def generate_image(pipe, prompt, output_path=f"generated_image_{time.time()}.png", steps=100, guidance_scale=4.0):
     print("Генерація зображення за допомогою Stable Diffusion...")
     try:
         image = pipe(prompt, num_inference_steps=steps, guidance_scale=guidance_scale).images[
