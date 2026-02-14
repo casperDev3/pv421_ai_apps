@@ -1,137 +1,88 @@
-import torch # для роботи з нейронними мережами
-import torchvision.transforms as transforms
-import torchvision.models as models
-import cv2 # малювання графіки
-import requests
-import time
-# import numpy as np
+import torch  # бібліотека для роботи з тензорами та нейронними мережами
+from diffusers import StableDiffusionPipeline  # імпорт класу для роботи з моделлю Stable Diffusion
+import os  # бібліотека для роботи з операційною системою
+import time  # бібліотека для роботи з часом
+import traceback  # бібліотека для отримання інформації про помилки та їх трасування
+
+MODEL_CACHE_DIR = "./models/stable-diffusion"  # директорія для збереження кешу моделі
+MODEL_ID = "runwayml/stable-diffusion-v1-5"  # ідентифікатор моделі для завантаження
 
 
-print("Завантаження моделі YOLOv5...")
-yolo_model = torch.hub.load('ultralytics/yolov5', 'yolov5s', pretrained=True) # завантаження моделі YOLOv5s
-yolo_model.eval() # встановлення моделі в режим оцінки
+def download_model():
+    print("Завантаження моделі Stable Diffusion...")
+    os.makedirs(MODEL_CACHE_DIR, exist_ok=True)  # створення директорії для кешу, якщо вона не існує
 
-print("Завантаження моделі ResNet50...")
-model = models.resnet50(pretrained=True) # завантаження моделі ResNet50
-model.eval() # встановлення моделі в режим оцінки
+    try:
+        pipe = StableDiffusionPipeline.from_pretrained(
+            MODEL_ID,
+            cache_dir=MODEL_CACHE_DIR,
+            torch_dtype=torch.float16,  # використання 16-бітної точності для зменшення використання пам'яті
+            safety_checker=None,  # відключення перевірки безпеки для прискорення завантаження
+            use_safetensors=True,
+            # використання формату safetensors для збереження моделі, що може бути швидше та безпечніше
+            low_cpu_mem_usage=True,  # оптимізація використання пам'яті при завантаженні моделі
+            variant="fp16"  # використання варіанту моделі з 16-бітною точністю
+        )
+        save_path = os.path.join(MODEL_CACHE_DIR, "saved_model")  # шлях для збереження моделі
+        pipe.save_pretrained(save_path)  # збереження моделі у вказаному шляху
+        print(f"Модель успішно завантажена та збережена в {save_path}")
+        return True
+    except Exception as e:
+        print("Помилка при завантаженні моделі:", e)
+        traceback.print_exc()  # виведення детальної інформації про помилку
+        return False
 
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu') # вибір пристрою (GPU або CPU)
-model = model.to(device) # переміщення моделі на вибраний пристрій
-yolo_model = yolo_model.to(device) # переміщення моделі YOLOv5 на вибраний пристрій
-print(f"Моделі завантажено та готові до роботи на пристрої: {device}")
 
-LABELS_URL = "https://raw.githubusercontent.com/anishathalye/imagenet-simple-labels/master/imagenet-simple-labels.json"
-labels = requests.get(LABELS_URL).json()
+def load_model():
+    device = "cuda" if torch.cuda.is_available() else "cpu"  # визначення пристрою для завантаження моделі (GPU або CPU)
+    print(f"Завантаження моделі на пристрій: {device}...")
 
-# Функція для обробки зображення перед передачею в ResNet50
-transform = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.Resize(256),
-    transforms.CenterCrop(224),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
-])
+    local = False
+    if os.path.exists(MODEL_CACHE_DIR):
+        local = True
 
-def predict_frame(frame):
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB) # конвертація зображення з BGR в RGB
-    img_tensor = transform(frame_rgb).unsqueeze(0).to(device) # обробка зображення та переміщення на пристрій
+    pipe = StableDiffusionPipeline.from_pretrained(
+        MODEL_ID,
+        cache_dir=MODEL_CACHE_DIR if local else None,  # використання кешу, якщо модель вже була завантажена раніше
+        torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+        # використання 16-бітної точності для GPU та 32-бітної для CPU
+        safety_checker=None,  # відключення перевірки безпеки для прискор
+        local_files_only=local,
+        use_safetensors=True,
+        low_cpu_mem_usage=True,
+        variant="fp16" if device == "cuda" else None
+    ).to(device)  # завантаження моделі на вказаний пристрій
 
-    with torch.no_grad():
-        outputs = model(img_tensor) # передбачення класу зображення
+    if device == "cuda":
+        pipe.enable_attention_slicing()  # оптимізація використання пам'яті на GPU шляхом розбиття уваги на частини
 
-    probabilities = torch.nn.functional.softmax(outputs[0], dim=0)
-    top_prob, top_idx = torch.max(probabilities, 0)
+    return pipe
 
-    top_class = labels[top_idx.item()] # отримання назви класу за індексом
-    confidence = top_prob.item() # отримання ймовірності передбачення
 
-    return top_class, confidence
+def generate_image(pipe, prompt, output_path=f"generated_image_{time.time()}.png", steps=50, guidance_scale=7.5):
+    print("Генерація зображення за допомогою Stable Diffusion...")
+    try:
+        image = pipe(prompt, num_inference_steps=steps, guidance_scale=guidance_scale).images[
+            0]  # генерація зображення на основі текстового запиту
+        image.save(output_path)  # збереження згенерованого зображення у вказаному шляху
+        print(f"Зображення успішно згенеровано та збережено в {output_path}")
+        return image
+    except Exception as e:
+        print("Помилка при генерації зображення:", e)
+        traceback.print_exc()  # виведення детальної інформації про помилку
+        return None
 
-def draw_text_with_background(frame, text, position, font_scale=0.8, thickness=2):
-    font = cv2.FONT_HERSHEY_SIMPLEX
-    (text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
-    x, y = position
-    overlay = frame.copy()
-    cv2.rectangle(overlay, (x, y - text_height - baseline), (x + text_width, y + baseline), (0, 0, 0), -1) # малювання чорного прямокутника для фону тексту
-    cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame) # накладання прямокутника на зображення
-
-    cv2.putText(frame, text, (x, y), font, font_scale, (255, 255, 255), thickness) # малювання тексту поверх прямокутника
-
-def run_real_time_detection(camera_id=0, confidence_threshold=0.3):
-    cap = cv2.VideoCapture(camera_id) # відкриття відеопотоку (0 для веб-камери)
-
-    if not cap.isOpened():
-        print("Помилка: Не вдалося відкрити відеопотік.")
-        return
-
-    cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1280) # встановлення ширини кадру
-    cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 720) # встановлення висоти кад
-
-    print("Починаємо обробку відеопотоку. Натисніть 'q' для виходу.")
-
-    fps_start_time = time.time()
-    fps_counter = 0
-    fps = 0
-
-    colors = [
-        (0, 255, 0),  # Зелений
-        (255, 0, 0),  # Синій
-        (0, 0, 255),  # Червоний
-        (255, 255, 0),  # Блакитний
-        (255, 0, 255),  # Пурпурний
-        (0, 255, 255),  # Жовтий
-    ]
-
-    while True:
-        ret, frame = cap.read() # зчитування кадру з відеопотоку
-        if not ret:
-            print("Помилка: Не вдалося зчитати кадр.")
-            break
-
-        try:
-            results = yolo_model(frame)  # передбачення об'єктів на кадрі за допомогою YOLOv5
-            detections = results.pandas().xyxy[0] # отримання координат та класів виявлених об'єктів
-
-            for idx, detection in detections.iterrows():
-                confidence = detection['confidence']
-                if confidence < confidence_threshold:
-                    continue  # пропуск об'єктів з низькою ймовірністю
-
-                x1, y1, x2, y2 = int(detection['xmin']), int(detection['ymin']), int(detection['xmax']), int(detection['ymax'])
-                class_name = detection['name']
-                color = colors[idx % len(colors)]  # вибір кольору для кожного класу
-
-                cv2.rectangle(frame, (x1, y1), (x2, y2), color, 2)  # малювання прямокутника навколо виявленого об'єкта
-
-                label = f"{class_name} - {round(confidence * 100, 2)}%"  # створення тексту з назвою класу та ймовірністю
-                draw_text_with_background(frame, label, (x1, y1 - 10))  # малювання тексту з фоном над прямокутником
-        except Exception as e:
-            print(f"Помилка при обробці кадру: {e}")
-
-        fps_counter +=  1
-        if time.time() - fps_start_time >= 1.0:  # оновлення FPS кожну секунду
-            fps = fps_counter
-            fps_counter = 0
-            fps_start_time = time.time()
-
-        # Відображення FPS накадрі
-        draw_text_with_background(frame, f"FPS: {fps}", (10, 30))  # малювання FPS в верхньому лівому куті
-        cv2.imshow('Real-Time Object Detection', frame)  # відображення кадру з виявленими об'єктами
-
-        if cv2.waitKey(1) & 0xFF == ord('q'):  # вихід з циклу при натисканні 'q'
-            break
-
-    cap.release()
-    cv2.destroyAllWindows()  # закриття всіх вікон OpenCV
-    print("Завершено обробку відеопотоку.")
 
 def main():
+    prompt = input("Введіть текстовий запит для генерації зображення: ")  # отримання текстового запиту від користувача
     try:
-        run_real_time_detection(camera_id=0, confidence_threshold=0.6)
-    except KeyboardInterrupt:
-        print("Завершення роботи за запитом користувача.")
+        pipe = load_model()  # завантаження моделі
+        generate_image(pipe, prompt)  # генерація зображення на основі запиту
     except Exception as e:
-        print(f"Помилка: {e}")
+        print("Помилка у головній функції:", e)
+        traceback.print_exc()  # виведення детальної інформації про помилку
+
 
 if __name__ == "__main__":
-    main()
+    # download_model()
+    main()  # запуск головної функції
