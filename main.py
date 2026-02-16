@@ -74,8 +74,33 @@ def ask_groq(prompt, system="You are a helpful assistant that answers in Ukraini
         print(f"❌ Помилка при запиті до GROQ: {e}")
         return "Вибач, сталася помилка при отриманні відповіді."
 
+def speak_ua(text):
+    try:
+        tts = gTTS(text=text, lang='uk')
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
+            tts.save(tmp_file.name)
+            play_audio(tmp_file.name)
+            # os.remove(tmp_file.name)  # видаляємо тимчасовий файл після відтворення
+    except Exception as e:
+        print(f"❌ Помилка при перетворенні тексту в мову: {e}")
+
+
+def main():
+    while True:
+        query = listen_ukrainian()
+        if not query:
+            continue
+
+        if query.lower() in ["вихід", "стоп", "завершити"]:
+            print("👋 До побачення!")
+            speak_ua("До побачення!")
+            break
+
+        print("Думаю...")
+        answer = ask_groq(query)
+        print("🤖 Відповідь:", answer)
+        speak_ua(answer)
+
+
 if __name__ == "__main__":
-    # print("Hello, World!")
-    prompt = listen_ukrainian()
-    if prompt:
-        print(ask_groq(prompt))
+    main()
