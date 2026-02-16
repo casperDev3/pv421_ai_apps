@@ -5,6 +5,7 @@ from gtts import gTTS  # бібліотека для перетворення т
 import tempfile  # бібліотека для створення тимчасових файлів
 import platform  # бібліотека для визначення операційної системи
 import subprocess  # бібліотека для виконання системних команд
+from pygame import mixer  # бібліотека для відтворення аудіо (необов'язково, можна використовувати системні засоби)
 
 # --- Конфіг ---
 GROQ_API_KEY = "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"
@@ -79,8 +80,14 @@ def speak_ua(text):
         tts = gTTS(text=text, lang='uk')
         with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
             tts.save(tmp_file.name)
-            play_audio(tmp_file.name)
+            # play_audio(tmp_file.name)
             # os.remove(tmp_file.name)  # видаляємо тимчасовий файл після відтворення
+        mixer.init()
+        mixer.music.load(tmp_file.name)
+        mixer.music.play()
+        while mixer.music.get_busy():
+            continue
+        os.remove(tmp_file.name)  # видаляємо тимчасовий файл після від
     except Exception as e:
         print(f"❌ Помилка при перетворенні тексту в мову: {e}")
 
