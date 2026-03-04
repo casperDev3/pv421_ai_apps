@@ -8,7 +8,7 @@ generator_base = pipeline(
 )
 
 prompts = [
-    "What name boy who study in Hogwarts and kill Lord Voldemort?",
+    "who wizard defeated Lord Voldemort?",
 ]
 
 for prompt in prompts:
